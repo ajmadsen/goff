@@ -103,12 +103,15 @@ func (i *input) CloseDecoder(idx int) {
 	stream := i.Streams()[idx]
 
 	if stream != nil && stream.codec != nil {
-		C.avcoddec_close(stream.codec)
+		C.avcodec_close(stream.codec)
 	}
 }
 
 func (i *input) Close() {
 	if i.fctx != nil {
+		for j := range i.Streams() {
+			i.CloseDecoder(j)
+		}
 		C.avformat_close_input(&i.fctx)
 	}
 	if i.c_fname != nil {
@@ -155,6 +158,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer ipt.Close()
 		ipt.Dump(i)
 		for j := range ipt.Streams() {
 			ipt.OpenDecoder(j)
