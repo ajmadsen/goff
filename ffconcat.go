@@ -39,6 +39,7 @@ type input struct {
 	c_fname *C.char
 }
 
+// newInput creates a new input structure and sets the finalizer
 func newInput() *input {
 	i := &input{}
 	runtime.SetFinalizer(i, func(i *input) {
@@ -47,6 +48,8 @@ func newInput() *input {
 	return i
 }
 
+// Open opens a file in FFmpeg by allocating an AVFormatContext and finding
+// stream information
 func (i *input) Open(filename string) error {
 	if i.fctx != nil {
 		return errors.New("input already open")
@@ -69,11 +72,13 @@ func (i *input) Open(filename string) error {
 	return nil
 }
 
+// OpenDecoder opens an AVCodecContext to decode the stream specified by idx
 func (i *input) OpenDecoder(idx int) error {
 	// bounds check
 	nb_streams := int(i.fctx.nb_streams)
 	if idx > nb_streams {
-		return errors.New(fmt.Sprintf("index out of bounds: %d > %d", idx, nb_streams))
+		return errors.New(fmt.Sprintf("index out of bounds: %d > %d", idx,
+			nb_streams))
 	}
 
 	stream := i.Streams()[idx]
@@ -93,6 +98,9 @@ func (i *input) OpenDecoder(idx int) error {
 	return nil
 }
 
+// CloseDecoder closes the AVCodecContext associated with the stream, should
+// one exist. It will panic if the idx is out of bounds, and will silently
+// ignore you if the stream doesn't have an open codec.
 func (i *input) CloseDecoder(idx int) {
 	// bounds check
 	nb_streams := int(i.fctx.nb_streams)
@@ -107,6 +115,8 @@ func (i *input) CloseDecoder(idx int) {
 	}
 }
 
+// Close attempts to close the input by closing all open decoders, closing the
+// file, and freeing any other resources associated with the input.
 func (i *input) Close() {
 	if i.fctx != nil {
 		for j := range i.Streams() {
@@ -121,15 +131,20 @@ func (i *input) Close() {
 	runtime.SetFinalizer(i, nil)
 }
 
+// Dump dumps information about the given stream to the console
 func (i *input) Dump(stream int) {
 	C.av_dump_format(i.fctx, C.int(stream), i.c_fname, 0)
 }
 
+// Streams returns a slice containing the streams in an input. The slice is
+// backed by a C array, and any attempts to modify the slice may have undesired
+// consequences.
 func (i *input) Streams() []*C.AVStream {
 	nstr := i.fctx.nb_streams
 	return (*[1 << 30]*C.AVStream)(unsafe.Pointer(i.fctx.streams))[:nstr:nstr]
 }
 
+// averror converts a return code to a descriptive string
 func averror(ret C.int) error {
 	var errbuf [256]C.char
 	C.av_make_error_string(&errbuf[0], C.size_t(len(errbuf)), ret)
