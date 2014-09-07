@@ -71,7 +71,7 @@ func (i *FormatContext) Stream(idx int) Stream {
 	if idx > i.NStreams() {
 		panic(fmt.Sprintf("stream %d is out of bounds"))
 	}
-	return stream{i.streams()[idx]}
+	return Stream{i.streams()[idx]}
 }
 
 // NStreams returns the number of streams in a FormatContext.
