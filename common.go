@@ -40,7 +40,7 @@ func averror(ret C.int) error {
 	return Error{int(ret)}
 }
 
-// Init initializes the FFmpeg library for usage
-func Init() {
+func init() {
+	// initializes the FFmpeg library for usage
 	C.av_register_all()
 }

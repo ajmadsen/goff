@@ -44,8 +44,7 @@ func (d *Dictionary) Map() map[string]string {
 // FromMap converts a string->interface{} map to a Dictionary
 func (d *Dictionary) FromMap(m map[string]interface{}) {
 	if d.dict != nil {
-		C.av_dict_free(&d.dict)
-		d.dict = nil
+		d.Free()
 	}
 
 	for k, v := range m {
