@@ -5,20 +5,20 @@
 #include "_cgo_export.h"
 
 
-int cgo_read_packet_wrap(void *opaque, uint8_t *buf, int buf_size)
+int cgo_avio_read_packet(void *opaque, uint8_t *buf, int buf_size)
 {
-  int ret = ioReadPacket(opaque, buf, buf_size);
+  int ret = go_avio_read_packet(opaque, buf, buf_size);
   return ret;
 }
 
-int cgo_write_packet_wrap(void *opaque, uint8_t *buf, int buf_size)
+int cgo_avio_write_packet(void *opaque, uint8_t *buf, int buf_size)
 {
-  int ret = ioWritePacket(opaque, buf, buf_size);
+  int ret = go_avio_read_packet(opaque, buf, buf_size);
   return ret;
 }
 
-int64_t cgo_seek_wrap(void *opaque, int64_t offset, int whence)
+int64_t cgo_avio_seek(void *opaque, int64_t offset, int whence)
 {
-  int ret = ioSeek(opaque, offset, whence);
+  int ret = go_avio_seek(opaque, offset, whence);
   return ret;
 }

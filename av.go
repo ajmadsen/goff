@@ -14,20 +14,31 @@ import (
 
 type Demuxer interface {
 	Close()
+	Dump(n int)
 }
 
 type fmtctx struct {
 	fctx   *C.AVFormatContext
 	c_name *C.char
+	ioctx  *avio
 }
 
 func (f *fmtctx) Close() {
 	if f.c_name != nil {
 		C.free(unsafe.Pointer(f.c_name))
+		f.c_name = nil
 	}
 	if f.fctx != nil {
 		C.avformat_close_input(&f.fctx)
 	}
+	if f.ioctx != nil {
+		f.ioctx.Close()
+		f.ioctx = nil
+	}
+}
+
+func (f *fmtctx) Dump(n int) {
+	C.av_dump_format(f.fctx, C.int(n), f.c_name, 0)
 }
 
 func init() {
@@ -46,7 +57,16 @@ func averror(ret C.int) string {
 	return C.GoStringN(&str[0], C.int(len(str)))
 }
 
-func OpenReader(ioctx *IO) (Demuxer, error) {
+func OpenDemuxer(r IOReader, name string) (Demuxer, error) {
+	ioctx, ok := r.(*avio)
+	if !ok {
+		tmpctx, err := NewIOReader(r)
+		if err != nil {
+			return nil, err
+		}
+		ioctx = tmpctx.(*avio)
+	}
+
 	fmt := C.avformat_alloc_context()
 	if fmt == nil {
 		return nil, errors.New("could not alloc format context")
@@ -60,8 +80,15 @@ func OpenReader(ioctx *IO) (Demuxer, error) {
 		return nil, errors.New(averror(ret))
 	}
 
+	ret = C.avformat_find_stream_info(fmt, nil)
+	if ret < 0 {
+		C.avformat_free_context(fmt)
+		return nil, errors.New(averror(ret))
+	}
+
 	return &fmtctx{
 		fmt,
-		C.CString(ioctx.Name()),
+		C.CString(name),
+		ioctx,
 	}, nil
 }

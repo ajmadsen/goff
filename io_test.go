@@ -23,13 +23,13 @@ func diff(b1 []byte, b2 []byte) bool {
 	return false
 }
 
-func openFile(t *testing.T, name string) *IO {
+func openFile(t *testing.T, name string) IOReader {
 	file, err := os.Open(name)
 	if err != nil {
 		t.Fatalf("failed to open test file: %v", err)
 	}
 
-	ioctx, err := NewIO(file, fname, false)
+	ioctx, err := NewIOReader(file)
 	if err != nil {
 		t.Fatalf("failed to create IO ctx: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestIOOpenURL(t *testing.T) {
 
 	<-wait
 
-	ioctx, err := OpenURL("http://localhost:32149/"+fname, FLAG_READ)
+	ioctx, err := OpenURLSource("http://localhost:32149/" + fname)
 	if err != nil {
 		t.Fatal(err)
 	}
