@@ -9,18 +9,30 @@ package av
 import "C"
 import (
 	"errors"
+	"reflect"
 	"unsafe"
 )
 
 type Demuxer interface {
 	Close()
 	Dump(n int)
+	NStreams() int
+	Stream(idx int) Stream
+}
+
+type Stream interface {
+	IsOpen() bool
+	Index() int
 }
 
 type fmtctx struct {
 	fctx   *C.AVFormatContext
 	c_name *C.char
 	ioctx  *avio
+}
+
+type stream struct {
+	s *C.AVStream
 }
 
 func (f *fmtctx) Close() {
@@ -39,6 +51,36 @@ func (f *fmtctx) Close() {
 
 func (f *fmtctx) Dump(n int) {
 	C.av_dump_format(f.fctx, C.int(n), f.c_name, 0)
+}
+
+func (f *fmtctx) streams() []*C.AVStream {
+	nstr := f.NStreams()
+	hdr := reflect.SliceHeader{
+		Data: uintptr(unsafe.Pointer(f.fctx.streams)),
+		Len:  nstr,
+		Cap:  nstr,
+	}
+	return *(*[]*C.AVStream)(unsafe.Pointer(&hdr))
+}
+
+func (f *fmtctx) NStreams() int {
+	return int(f.fctx.nb_streams)
+}
+
+func (f *fmtctx) Stream(idx int) Stream {
+	if idx > f.NStreams() || idx < 0 {
+		return nil
+	}
+
+	return &stream{f.streams()[idx]}
+}
+
+func (s *stream) Index() int {
+	return int(s.s.index)
+}
+
+func (s *stream) IsOpen() bool {
+	return (s.s.codec != nil && s.s.codec.codec != nil)
 }
 
 func init() {
