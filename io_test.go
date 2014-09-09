@@ -71,6 +71,11 @@ func TestIOOpenURL(t *testing.T) {
 		}
 	}(wait)
 
+	// Hack to wait for the goroutine to start, because we were getting issues
+	// where FFmpeg was attempting to open the URL before Go could spin up the
+	// HTTP server. Waiting for the goroutine to start appeared to solve the
+	// issue, and is slightly more flexible than sleeping for some amount of
+	// time.
 	<-wait
 
 	ioctx, err := OpenURLSource("http://localhost:32149/" + fname)
