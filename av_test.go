@@ -1,6 +1,9 @@
 package av
 
-import "testing"
+import (
+	"io"
+	"testing"
+)
 
 func asserteq(t *testing.T, what string, expected interface{}, got interface{}) {
 	if expected != got {
@@ -64,5 +67,55 @@ func TestStreamIsOpen(t *testing.T) {
 	fmt := openDemux(t, fname)
 	str := fmt.Stream(fmt.NStreams() - 1)
 	asserteq(t, "str.IsOpen()", false, str.IsOpen())
+	fmt.Close()
+}
+
+func TestPacket(t *testing.T) {
+	fmt := openDemux(t, fname)
+	pkt, err := fmt.ReadPacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("index      = %v", pkt.Index())
+	t.Logf("dts        = %v", pkt.Dts())
+	t.Logf("pts        = %v", pkt.Pts())
+	t.Logf("duration   = %v", pkt.Duration())
+	t.Logf("pos        = %v", pkt.Position())
+	t.Logf("iskey      = %v", pkt.IsKey())
+	t.Logf("iscorrupt  = %v", pkt.IsCorrupt())
+	t.Logf("size       = %v", pkt.Size())
+
+	siz := pkt.Size()
+	if siz > 16 {
+		siz = 16
+	}
+
+	t.Logf("data       = %v...", pkt.Data()[:siz])
+
+	pkt.Free()
+	fmt.Close()
+}
+
+func TestReadPacket(t *testing.T) {
+	fmt := openDemux(t, fname)
+
+	count := int(0)
+Loop:
+	for {
+		pkt, err := fmt.ReadPacket()
+		switch {
+		case err == io.EOF:
+			break Loop
+		case err != nil:
+			t.Fatal(err)
+		default:
+			count++
+			pkt.Free()
+		}
+	}
+
+	t.Logf("Read %d packets", count)
+
 	fmt.Close()
 }
