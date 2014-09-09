@@ -3,7 +3,7 @@ package av
 import "testing"
 
 func TestOpenFile(t *testing.T) {
-	ioctx := openFile(t)
+	ioctx := openFile(t, fname)
 
 	fmt, err := OpenReader(ioctx)
 	if err != nil {
