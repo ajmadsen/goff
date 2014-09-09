@@ -7,7 +7,7 @@ func TestOpenFile(t *testing.T) {
 
 	fmt, err := OpenReader(ioctx)
 	if err != nil {
-		t.Errorf("could not open reader: %v", err)
+		t.Fatalf("could not open reader: %v", err)
 	}
 	fmt.Close()
 

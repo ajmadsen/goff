@@ -15,17 +15,15 @@ import "C"
 import (
 	"errors"
 	"io"
-	"log"
 	"reflect"
 	"unsafe"
 )
 
-const bufsiz = 4096
+const bufsiz = 32 * 1024
 
 type IO struct {
 	ctx    *C.AVIOContext
 	stream interface{}
-	buf    *C.uchar
 	name   string
 }
 
@@ -34,17 +32,42 @@ func (i *IO) Name() string {
 }
 
 func (i *IO) Close() {
+	if i.ctx.buffer != nil {
+		C.av_freep(unsafe.Pointer(&i.ctx.buffer))
+	}
 	if i.ctx != nil {
 		C.av_freep(unsafe.Pointer(&i.ctx))
 	}
-	if i.buf != nil {
-		C.av_freep(unsafe.Pointer(&i.buf))
+}
+
+func (i *IO) Read(b []byte) (int, error) {
+	ret := C.avio_read(i.ctx, (*C.uchar)(unsafe.Pointer(&b[0])), C.int(len(b)))
+	if ret <= 0 {
+		if C.avio_feof(i.ctx) != 0 {
+			return 0, io.EOF
+		}
+		return 0, errors.New(averror(ret))
 	}
+	return int(ret), nil
+}
+
+func (i *IO) Write(b []byte) (int, error) {
+	C.avio_write(i.ctx, (*C.uchar)(unsafe.Pointer(&b[0])), C.int(len(b)))
+	return len(b), nil
+}
+
+func (i *IO) Seek(offset int64, whence int) (int64, error) {
+	ret := int64(C.avio_seek(i.ctx, C.int64_t(offset), C.int(whence)))
+	if ret < 0 {
+		return ret, errors.New(averror(C.int(ret)))
+	}
+	return ret, nil
 }
 
 // NewIO creates a new IO context from a ReadSeeker.  stream should implement
-// some set of {Reader, Writer, Seeker}.
-func NewIO(stream interface{}, name string) (*IO, error) {
+// some set of {Reader, Writer, Seeker}. If writable == true and stream
+// implements Writer, sets the writer flag internally.
+func NewIO(stream interface{}, name string, writable bool) (*IO, error) {
 	ctx := &IO{}
 
 	var readFcn, writeFcn, seekFcn unsafe.Pointer
@@ -52,9 +75,11 @@ func NewIO(stream interface{}, name string) (*IO, error) {
 	if _, ok := stream.(io.Reader); ok {
 		readFcn = C.cgo_read_packet_wrap
 	}
-	if _, ok := stream.(io.Writer); ok {
-		writeFcn = C.cgo_write_packet_wrap
+	if writable {
 		c_writable = 1
+		if _, ok := stream.(io.Writer); ok {
+			writeFcn = C.cgo_write_packet_wrap
+		}
 	}
 	if _, ok := stream.(io.Seeker); ok {
 		seekFcn = C.cgo_seek_wrap
@@ -64,15 +89,15 @@ func NewIO(stream interface{}, name string) (*IO, error) {
 		return nil, errors.New("stream does not implement anything useful")
 	}
 
-	ctx.buf = (*C.uchar)(C.av_malloc(bufsiz))
-	if ctx.buf == nil {
+	buf := (*C.uchar)(C.av_malloc(bufsiz))
+	if buf == nil {
 		return nil, errors.New("out of memory")
 	}
 
 	ctx.name = name
 
 	ctx.stream = stream
-	ctx.ctx = C.avio_alloc_context(ctx.buf,
+	ctx.ctx = C.avio_alloc_context(buf,
 		bufsiz,
 		c_writable,
 		unsafe.Pointer(ctx),
@@ -80,7 +105,7 @@ func NewIO(stream interface{}, name string) (*IO, error) {
 		(*[0]byte)(writeFcn),
 		(*[0]byte)(seekFcn))
 	if ctx.ctx == nil {
-		ctx.Close()
+		C.av_freep(unsafe.Pointer(&buf))
 		return nil, errors.New("could not alloc AVIOContext")
 	}
 
@@ -101,8 +126,6 @@ func ioReadPacket(opaque unsafe.Pointer, buf *C.uint8_t, buf_siz C.int) C.int {
 	ctx := (*IO)(opaque)
 	p := makeByteSlice(buf, buf_siz)
 	ret, err := ctx.stream.(io.Reader).Read(p)
-	log.Printf("ret = %v, err = %v", ret, err)
-	log.Print(p)
 	if ret > 0 {
 		return C.int(ret)
 	}
@@ -117,7 +140,6 @@ func ioWritePacket(opaque unsafe.Pointer, buf *C.uint8_t, buf_siz C.int) C.int {
 	ctx := (*IO)(opaque)
 	p := makeByteSlice(buf, buf_siz)
 	ret, err := ctx.stream.(io.Writer).Write(p)
-	log.Printf("ret = %v, err = %v", ret, err)
 	if ret > 0 {
 		return C.int(ret)
 	}
@@ -131,9 +153,8 @@ func ioWritePacket(opaque unsafe.Pointer, buf *C.uint8_t, buf_siz C.int) C.int {
 func ioSeek(opaque unsafe.Pointer, offset C.int64_t, whence C.int) C.int64_t {
 	ctx := (*IO)(opaque)
 	ret, err := ctx.stream.(io.Seeker).Seek(int64(offset), int(whence))
-	log.Printf("ret = %v, err = %v", ret, err)
 	if err != nil {
 		return -1
 	}
-	return 0
+	return C.int64_t(ret)
 }

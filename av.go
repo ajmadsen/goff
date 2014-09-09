@@ -47,20 +47,18 @@ func averror(ret C.int) string {
 }
 
 func OpenReader(ioctx *IO) (Demuxer, error) {
-	var ifmt *C.AVInputFormat
-
-	ret := C.av_probe_input_buffer(ioctx.ctx, &ifmt, nil, nil, 0, 0)
-	if ret < 0 {
-		return nil, errors.New(averror(ret))
-	}
-
 	fmt := C.avformat_alloc_context()
 	if fmt == nil {
 		return nil, errors.New("could not alloc format context")
 	}
 
-	fmt.iformat = ifmt
 	fmt.pb = ioctx.ctx
+
+	ret := C.avformat_open_input(&fmt, nil, nil, nil)
+	if ret < 0 {
+		C.avformat_free_context(fmt)
+		return nil, errors.New(averror(ret))
+	}
 
 	return &fmtctx{
 		fmt,
