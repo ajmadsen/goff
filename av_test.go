@@ -119,3 +119,34 @@ Loop:
 
 	fmt.Close()
 }
+
+func TestSeek(t *testing.T) {
+	fmt := openDemux(t, fname)
+
+	str := fmt.Stream(0)
+	err := fmt.Seek(str, 0, SEEK_BACKWARD|SEEK_FRAME)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pkt1, err := fmt.ReadPacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = fmt.Seek(str, 0, SEEK_BACKWARD|SEEK_FRAME)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pkt2, err := fmt.ReadPacket()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if pkt1.Position() != pkt2.Position() {
+		t.Fatal("seeking doesn't produce consistent frame")
+	}
+
+	fmt.Close()
+}

@@ -14,7 +14,16 @@ import (
 	"unsafe"
 )
 
+// NO_PTS used to denote a packet/frame with no PTS.
 const NO_PTS = C.AV_NOPTS_VALUE
+
+// Seek flags
+const (
+	SEEK_BACKWARD = 1
+	SEEK_BYTE     = 2
+	SEEK_ANY      = 4
+	SEEK_FRAME    = 8
+)
 
 type Demuxer interface {
 	Close()
@@ -22,6 +31,7 @@ type Demuxer interface {
 	NStreams() int
 	Stream(idx int) Stream
 	ReadPacket() (Packet, error)
+	Seek(stream Stream, timestamp int64, flags int) error
 }
 
 type Stream interface {
@@ -51,7 +61,8 @@ type avfmtctx struct {
 }
 
 type stream struct {
-	s *C.AVStream
+	s    *C.AVStream
+	fctx *avfmtctx
 }
 
 type packet struct {
@@ -97,7 +108,10 @@ func (f *avfmtctx) Stream(idx int) Stream {
 		return nil
 	}
 
-	return &stream{f.streams()[idx]}
+	return &stream{
+		f.streams()[idx],
+		f,
+	}
 }
 
 func (f *avfmtctx) ReadPacket() (Packet, error) {
@@ -118,6 +132,14 @@ func (f *avfmtctx) ReadPacket() (Packet, error) {
 	}
 
 	return newpkt, nil
+}
+
+func (f *avfmtctx) Seek(stream Stream, timestamp int64, flags int) error {
+	ret := C.av_seek_frame(f.fctx, C.int(stream.Index()), C.int64_t(timestamp), C.int(flags))
+	if ret < 0 {
+		return errors.New(averror(ret))
+	}
+	return nil
 }
 
 // STREAM
